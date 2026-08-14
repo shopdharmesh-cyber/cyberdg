@@ -38,10 +38,15 @@ The TDL source is in [`TDL/MachineDowntimeTracker.tdl`](TDL/MachineDowntimeTrack
 2. **Machines** — `Alt+G` → `Create` → `Cost Centre` to add one Cost Centre
    per machine under the `Machines` category. Put the machine's short code
    in **Alias**.
-3. **Memo ledger** — create a ledger named exactly `Machine Downtime (Memo)`
+3. **Voucher types** — voucher types are Tally data masters and cannot be
+   created from TDL, so create these two manually via `Alt+G` → `Create` →
+   `Voucher Type` (names must match exactly):
+   - `Machine Item Issue` — Select type of voucher as `Stock Journal`
+   - `Machine Downtime Entry` — Select type of voucher as `Journal`
+4. **Memo ledger** — create a ledger named exactly `Machine Downtime (Memo)`
    under the group `Suspense Account`. This is the ledger the Downtime Entry
    voucher posts its (zero-value) self-offsetting entry to.
-4. **Allow zero-valued transactions** — `F11` → `Accounting Features` →
+5. **Allow zero-valued transactions** — `F11` → `Accounting Features` →
    set **Allow Zero-Valued Transactions** to `Yes`. This lets the Downtime
    Entry voucher save without affecting your books.
 

@@ -69,11 +69,10 @@
 ;; there is no manufactured output being tracked here. The Machine field
 ;; applies to the whole voucher (one machine per issue voucher), and is
 ;; captured just above the Narration during voucher entry.
-
-[Voucher Type: Machine Item Issue]
-	Parent               : Stock Journal
-	Numbering Method     : Automatic
-	Use Common Narration : Yes
+;;
+;; ONE-TIME SETUP REQUIRED (see README): voucher types are Tally data
+;; masters and cannot be created from TDL. Create a voucher type named
+;; exactly "Machine Item Issue" with Type of Voucher = Stock Journal.
 
 [Field: MII Machine Field]
 	Use     : Name Field
@@ -119,9 +118,8 @@
 	Invisible : NOT @@IsMachineIssueVch
 
 ;; VCH Narration is the standard narration Part/Line of the voucher entry
-;; screen in TallyPrime's default TDL; new lines are anchored before it.
-[#Part: VCH Narration]
-	Add : Line : Before : VCH Narration : MII Machine Line, MII Reason Line, MIIRemarks Line
+;; screen in TallyPrime's default TDL; new lines for both voucher types are
+;; anchored before it in a single modifier block at the end of section 4.
 
 
 ;; ----------------------------------------------------------------------------
@@ -133,13 +131,11 @@
 ;; "Machine Downtime (Memo)" so it never affects real books.
 ;;
 ;; ONE-TIME SETUP REQUIRED (see README):
+;;   - Voucher type named exactly "Machine Downtime Entry" with
+;;     Type of Voucher = Journal (voucher types are Tally data masters
+;;     and cannot be created from TDL)
 ;;   - Ledger "Machine Downtime (Memo)" under group "Suspense Account"
 ;;   - F11 > Allow Zero-Valued Transactions = Yes
-
-[Voucher Type: Machine Downtime Entry]
-	Parent               : Journal
-	Numbering Method     : Automatic
-	Use Common Narration : Yes
 
 [Field: MDE Machine Field]
 	Use     : Name Field
@@ -219,6 +215,7 @@
 	Invisible : NOT @@IsMachineDowntimeVch
 
 [#Part: VCH Narration]
+	Add : Line : Before : VCH Narration : MII Machine Line, MII Reason Line, MIIRemarks Line
 	Add : Line : Before : VCH Narration : MDE Machine Line, MDE Time Line, MDEReason Line, MDERemarks Line
 
 

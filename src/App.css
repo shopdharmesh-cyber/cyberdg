@@ -187,6 +187,18 @@
   font-size: 15px;
 }
 
+.card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
 @media (max-width: 900px) {
   .card-grid {
     grid-template-columns: 1fr;
@@ -333,6 +345,26 @@
 
 .cta-inner .btn {
   margin-top: 8px;
+}
+
+.contact-details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+
+.contact-details a {
+  color: var(--text-h);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.contact-details a:hover {
+  color: var(--accent);
 }
 
 /* Footer */

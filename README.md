@@ -1,6 +1,6 @@
-# CyberDG
+# PP Solutions
 
-Marketing website for CyberDG, built with React and Vite.
+Marketing website for PP Solutions (www.ppsolutions.co.in) — CCTV & surveillance, cybersecurity, accounting, and insurance services in Haldwani, Uttarakhand. Built with React and Vite.
 
 ## Development
 

@@ -35,9 +35,9 @@ The TDL source is in [`TDL/MachineDowntimeTracker.tdl`](TDL/MachineDowntimeTrack
 1. **Cost Category** — `Alt+G` (Go To) → `Create` → `Cost Category`, name it
    exactly `Machines`. (Enable **Cost Centres** and **More than ONE Cost
    Category** under `F11` → Accounting Features if not already on.)
-2. **Machines** — use the new **Create Machine** item on the Gateway of Tally
-   (or `Alt+G` → `Create` → `Cost Centre`) to add one Cost Centre per machine
-   under the `Machines` category. Put the machine's short code in **Alias**.
+2. **Machines** — `Alt+G` → `Create` → `Cost Centre` to add one Cost Centre
+   per machine under the `Machines` category. Put the machine's short code
+   in **Alias**.
 3. **Memo ledger** — create a ledger named exactly `Machine Downtime (Memo)`
    under the group `Suspense Account`. This is the ledger the Downtime Entry
    voucher posts its (zero-value) self-offsetting entry to.
@@ -48,12 +48,14 @@ The TDL source is in [`TDL/MachineDowntimeTracker.tdl`](TDL/MachineDowntimeTrack
 ## Using it
 
 - **Issue items to a machine**: `Alt+G` → `Create Voucher` → select
-  `Machine Item Issue`. Pick the Machine, Reason and Remarks in the header,
-  then list the items issued under Source (Consumption).
+  `Machine Item Issue`. List the items issued under Source (Consumption),
+  then fill in the Machine, Issue Reason and Remarks fields that appear just
+  above the Narration.
 - **Log downtime**: `Alt+G` → `Create Voucher` → select
-  `Machine Downtime Entry`. Fill in Machine, From/To time (24-hr `HH:MM`),
-  Duration (minutes), Reason and Remarks, then accept through the (hidden,
-  zero-value) ledger entry.
+  `Machine Downtime Entry`. Post a zero-value Dr/Cr entry to the
+  `Machine Downtime (Memo)` ledger, then fill in Machine, From/To time
+  (24-hr `HH:MM`), Duration (minutes), Reason and Remarks just above the
+  Narration.
 - **Reports**: Gateway of Tally → `Machine Reports` → choose
   `Machine Item Issue Register` or `Machine Downtime Report`.
 
@@ -63,21 +65,23 @@ This TDL was authored without a live TallyPrime instance to compile against,
 so validate it in a sandbox/test company before relying on it in production:
 
 - If the TDL fails to load, check `F1` → `TDL & Add-On` for the compile error
-  line, and cross-check the field/part names below.
-- If the **Machine / Reason / Remarks fields don't appear** on the voucher
-  screen, the anchor `Field: Narration Field` inside `Part: Voucher Type Sub
-  Form` may be named differently in your TallyPrime release. Try anchoring to
-  another stable field on that screen instead (e.g. `Field: Vch Ref Field`),
-  or ask your Tally partner to confirm the exact part/line names via
-  `Ctrl+Alt+T` (TDL trace) in debug mode.
+  line, and cross-check the field/part names below. Note that TDL comments
+  must start with `;` — this file uses `;;` for all comment lines.
+- If the **custom fields don't appear** on the voucher entry screen, the
+  anchor part/line `VCH Narration` may be named differently in your
+  TallyPrime release. Confirm the exact default part/line names via
+  `Ctrl+Alt+T` (TDL trace) or with your Tally partner, and adjust the two
+  `[#Part: VCH Narration]` blocks in the `.tdl` file accordingly.
+- The custom lines are added to **every** voucher entry screen but kept
+  hidden via `Invisible : NOT @@Is...Vch` conditions — they only become
+  visible when the voucher type is `Machine Item Issue` or
+  `Machine Downtime Entry`. If they show up on other voucher types, verify
+  the voucher type names match exactly (rename-sensitive).
 - If UDF field numbers `9061-9069` clash with another TDL already loaded,
   renumber the `[System: UDF]` block in the `.tdl` file.
 - The Machine Downtime Report currently ships as a chronological detail
   register only. For a machine-wise rolled-up summary (total minutes, event
-  counts), export the register to Excel and summarise there, or extend
-  `[Collection: Machine Downtime Vouchers]` with a `Group By` + aggregate
-  Part once you've confirmed the exact aggregate function names supported by
-  your TallyPrime release.
+  counts), export the register to Excel (`Alt+E`) and summarise there.
 
 ## Repository layout
 

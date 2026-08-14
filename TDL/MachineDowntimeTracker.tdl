@@ -1,415 +1,415 @@
-*  ============================================================================
-*  Machine Downtime & Item Issue Tracker  --  TallyPrime TDL Add-On
-*  ============================================================================
-*  Purpose : Adds machine-wise stock item issue tracking and machine downtime
-*            logging to TallyPrime, with dedicated registers/reports.
-*
-*  Modules :
-*    1. UDF (User Defined Field) declarations
-*    2. Machine master (built on Cost Centre, category "Machines")
-*    3. Voucher Type : Machine Item Issue      (based on Stock Journal)
-*    4. Voucher Type : Machine Downtime Entry  (based on Journal, memo ledger)
-*    5. Collections used by the reports below
-*    6. Report : Machine Item Issue Register
-*    7. Report : Machine Downtime Report
-*    8. Gateway of Tally menu integration
-*
-*  See README.md in this repository for installation, one-time setup
-*  (Cost Category, memo ledger, Zero-Valued Transactions) and troubleshooting.
-*  ============================================================================
+;; ============================================================================
+;; Machine Downtime & Item Issue Tracker  --  TallyPrime TDL Add-On
+;; ============================================================================
+;; Purpose : Adds machine-wise stock item issue tracking and machine downtime
+;;           logging to TallyPrime, with dedicated registers/reports.
+;;
+;; Modules :
+;;   1. UDF (User Defined Field) declarations
+;;   2. Machine master (built on Cost Centre, category "Machines")
+;;   3. Voucher Type : Machine Item Issue      (based on Stock Journal)
+;;   4. Voucher Type : Machine Downtime Entry  (based on Journal, memo ledger)
+;;   5. Collections used by the reports below
+;;   6. Report : Machine Item Issue Register
+;;   7. Report : Machine Downtime Report
+;;   8. Gateway of Tally menu integration
+;;
+;; See README.md in this repository for installation, one-time setup
+;; (Cost Category, memo ledger, Zero-Valued Transactions) and troubleshooting.
+;; ============================================================================
 
 
-*  ----------------------------------------------------------------------------
-*  1. UDF DECLARATIONS
-*  ----------------------------------------------------------------------------
-*  Field numbers use the 9060-9080 custom range. If another TDL already loaded
-*  on the target Tally instance uses the same numbers, renumber this block.
+;; ----------------------------------------------------------------------------
+;; 1. UDF DECLARATIONS
+;; ----------------------------------------------------------------------------
+;; Field numbers use the 9061-9069 custom range. If another TDL already loaded
+;; on the target Tally instance uses the same numbers, renumber this block.
 
 [System: UDF]
-	MII_MachineName      : String  : 9061
-	MII_IssueReason      : String  : 9062
-	MII_Remarks          : String  : 9063
+	MIIMachineName     : String : 9061
+	MIIIssueReason     : String : 9062
+	MIIRemarks         : String : 9063
+	MDEMachineName     : String : 9064
+	MDEFromTime        : String : 9065
+	MDEToTime          : String : 9066
+	MDEDurationMinutes : Number : 9067
+	MDEReason          : String : 9068
+	MDERemarks         : String : 9069
 
-	MDE_MachineName      : String  : 9064
-	MDE_FromTime         : String  : 9065
-	MDE_ToTime            : String  : 9066
-	MDE_DurationMinutes  : Number  : 9067
-	MDE_Reason           : String  : 9068
-	MDE_Remarks          : String  : 9069
 
+;; ----------------------------------------------------------------------------
+;; 2. MACHINE MASTER
+;; ----------------------------------------------------------------------------
+;; Machines are represented as Cost Centres under a dedicated Cost Category
+;; called "Machines" (create this once, see README). This re-uses Tally's
+;; native master screens (Create/Alter/Display). Convention:
+;;    Cost Centre Name   -> Machine Name (e.g. "CNC Lathe 01")
+;;    Cost Centre Alias  -> Machine Code (e.g. "CNC-01")
+;;    Parent Cost Centre -> Department / Shop Floor Area (optional hierarchy)
 
-*  ----------------------------------------------------------------------------
-*  2. MACHINE MASTER
-*  ----------------------------------------------------------------------------
-*  Machines are represented as Cost Centres under a dedicated Cost Category
-*  called "Machines" (create this once, see README). This re-uses Tally's
-*  native master screens (Create/Alter/Display) instead of a bespoke object,
-*  which keeps this add-on small and reliable. Convention:
-*     Cost Centre Name  -> Machine Name   (e.g. "CNC Lathe 01")
-*     Cost Centre Alias -> Machine Code   (e.g. "CNC-01")
-*     Parent Cost Centre-> Department / Shop Floor Area (optional hierarchy)
-
-[System: Formulae]
-	Is Machine Cost Centre    : $Category = "Machines"
-	Is Machine Item Issue Vch : $$VoucherTypeName = "Machine Item Issue"
-	Is Machine Downtime Vch   : $$VoucherTypeName = "Machine Downtime Entry"
+[System: Formula]
+	IsMachineCC          : $Category = "Machines"
+	IsMachineIssueVch    : $VoucherTypeName = "Machine Item Issue"
+	IsMachineDowntimeVch : $VoucherTypeName = "Machine Downtime Entry"
 
 [Collection: Machine Cost Centres]
-	Type       : Cost Centre
-	Fetch      : Name, Alias, Category, Parent
-	Filter     : Is Machine Cost Centre
-	Sort       : Default
-
-;  Convenience Gateway shortcuts so operators don't need to know the
-;  underlying Cost Centre / Cost Category mechanics.
+	Type   : Cost Centre
+	Fetch  : Name, Category, Parent
+	Filter : IsMachineCC
 
 [#Menu: Gateway of Tally]
-	Add : Item : Create Machine   : Create : Cost Centre
-	Add : Item : Machine Reports  : Menu    : Machine Reports Menu
+	Add : Item : Machine Reports : Menu : Machine Reports Menu
 
 
-*  ----------------------------------------------------------------------------
-*  3. VOUCHER TYPE: MACHINE ITEM ISSUE  (Parent: Stock Journal)
-*  ----------------------------------------------------------------------------
-*  Used to issue stock items for consumption at a specific machine. Record
-*  the items under "Source (Consumption)"; leave "Destination" empty since
-*  there is no manufactured output being tracked here. The Machine field
-*  applies to the whole voucher (one machine per issue voucher).
+;; ----------------------------------------------------------------------------
+;; 3. VOUCHER TYPE: MACHINE ITEM ISSUE  (Parent: Stock Journal)
+;; ----------------------------------------------------------------------------
+;; Used to issue stock items for consumption at a specific machine. Record
+;; the items under "Source (Consumption)"; leave "Destination" empty since
+;; there is no manufactured output being tracked here. The Machine field
+;; applies to the whole voucher (one machine per issue voucher), and is
+;; captured just above the Narration during voucher entry.
 
 [Voucher Type: Machine Item Issue]
 	Parent               : Stock Journal
 	Numbering Method     : Automatic
 	Use Common Narration : Yes
-	Restart Numbering    : Yes
-	Starting Number      : 1
 
-[Field: Machine Issue - Machine Name Field]
-	Set as    : $MII_MachineName
-	Storage   : MII_MachineName
-	Table     : Machine Cost Centres
-	Width     : 30
-	Info Line : "Machine to which these items are being issued"
+[Field: MII Machine Field]
+	Use     : Name Field
+	Set as  : $MIIMachineName
+	Storage : MIIMachineName
+	Table   : Machine Cost Centres
+	Width   : 25
 
-[Field: Machine Issue - Reason Field]
-	Set as    : $MII_IssueReason
-	Storage   : MII_IssueReason
-	Width     : 30
-	Info Line : "Reason for issue, e.g. Production, Maintenance, Trial Run"
+[Field: MII Reason Field]
+	Use     : Name Field
+	Set as  : $MIIIssueReason
+	Storage : MIIIssueReason
+	Width   : 25
 
-[Field: Machine Issue - Remarks Field]
-	Set as  : $MII_Remarks
-	Storage : MII_Remarks
-	Width   : 30
+[Field: MIIRemarks Field]
+	Use     : Name Field
+	Set as  : $MIIRemarks
+	Storage : MIIRemarks
+	Width   : 25
 
-[Line: Machine Issue Details Line]
-	Option : Is Machine Item Issue Vch
-	Fields : Machine Issue - Machine Name Field, Machine Issue - Reason Field, Machine Issue - Remarks Field
+[Field: MII Machine Prompt]
+	Use    : Medium Prompt
+	Set as : "Machine : "
 
-[#Part: Voucher Type Sub Form]
-	Add : Line : Machine Issue Details Line : Before : Field : Narration Field
+[Field: MII Reason Prompt]
+	Use    : Medium Prompt
+	Set as : "Issue Reason : "
+
+[Field: MIIRemarks Prompt]
+	Use    : Medium Prompt
+	Set as : "Remarks : "
+
+[Line: MII Machine Line]
+	Fields    : MII Machine Prompt, MII Machine Field
+	Invisible : NOT @@IsMachineIssueVch
+
+[Line: MII Reason Line]
+	Fields    : MII Reason Prompt, MII Reason Field
+	Invisible : NOT @@IsMachineIssueVch
+
+[Line: MIIRemarks Line]
+	Fields    : MIIRemarks Prompt, MIIRemarks Field
+	Invisible : NOT @@IsMachineIssueVch
+
+;; VCH Narration is the standard narration Part/Line of the voucher entry
+;; screen in TallyPrime's default TDL; new lines are anchored before it.
+[#Part: VCH Narration]
+	Add : Line : Before : VCH Narration : MII Machine Line, MII Reason Line, MIIRemarks Line
 
 
-*  ----------------------------------------------------------------------------
-*  4. VOUCHER TYPE: MACHINE DOWNTIME ENTRY  (Parent: Journal)
-*  ----------------------------------------------------------------------------
-*  A lightweight, non-financial log of machine downtime. Built on Journal so
-*  it gets standard numbering, alteration, and Day Book visibility for free.
-*  It posts a self-offsetting Rs.0 entry to a dedicated memo ledger so it
-*  never affects real books.
-*
-*  ONE-TIME SETUP REQUIRED (see README):
-*    - Ledger "Machine Downtime (Memo)" under group "Suspense Account"
-*    - F11/F12 > Voucher Entry > "Allow Zero-Valued Transactions" = Yes
+;; ----------------------------------------------------------------------------
+;; 4. VOUCHER TYPE: MACHINE DOWNTIME ENTRY  (Parent: Journal)
+;; ----------------------------------------------------------------------------
+;; A lightweight, non-financial log of machine downtime. Built on Journal so
+;; it gets standard numbering, alteration, and Day Book visibility for free.
+;; Post a self-offsetting Rs.0 Dr/Cr entry to the dedicated memo ledger
+;; "Machine Downtime (Memo)" so it never affects real books.
+;;
+;; ONE-TIME SETUP REQUIRED (see README):
+;;   - Ledger "Machine Downtime (Memo)" under group "Suspense Account"
+;;   - F11 > Allow Zero-Valued Transactions = Yes
 
 [Voucher Type: Machine Downtime Entry]
 	Parent               : Journal
 	Numbering Method     : Automatic
 	Use Common Narration : Yes
-	Restart Numbering    : Yes
-	Starting Number      : 1
 
-[Field: Downtime - Machine Name Field]
-	Set as    : $MDE_MachineName
-	Storage   : MDE_MachineName
-	Table     : Machine Cost Centres
-	Width     : 30
-	Info Line : "Machine that experienced downtime"
+[Field: MDE Machine Field]
+	Use     : Name Field
+	Set as  : $MDEMachineName
+	Storage : MDEMachineName
+	Table   : Machine Cost Centres
+	Width   : 25
 
-[Field: Downtime - From Time Field]
-	Set as    : $MDE_FromTime
-	Storage   : MDE_FromTime
-	Width     : 10
-	Info Line : "Downtime start, 24-hr HH:MM, e.g. 14:30"
+[Field: MDEFromTime Field]
+	Use     : Name Field
+	Set as  : $MDEFromTime
+	Storage : MDEFromTime
+	Width   : 10
 
-[Field: Downtime - To Time Field]
-	Set as    : $MDE_ToTime
-	Storage   : MDE_ToTime
-	Width     : 10
-	Info Line : "Downtime end, 24-hr HH:MM, e.g. 15:10"
+[Field: MDEToTime Field]
+	Use     : Name Field
+	Set as  : $MDEToTime
+	Storage : MDEToTime
+	Width   : 10
 
-[Field: Downtime - Duration Field]
-	Set as    : $MDE_DurationMinutes
-	Storage   : MDE_DurationMinutes
-	Width     : 10
-	Info Line : "Total downtime in minutes"
+[Field: MDE Duration Field]
+	Use     : Number Field
+	Set as  : $MDEDurationMinutes
+	Storage : MDEDurationMinutes
+	Width   : 10
 
-[Field: Downtime - Reason Field]
-	Set as    : $MDE_Reason
-	Storage   : MDE_Reason
-	Width     : 30
-	Info Line : "e.g. Breakdown, Preventive Maintenance, Power Failure, Material Shortage, Changeover, Operator Unavailable"
+[Field: MDEReason Field]
+	Use     : Name Field
+	Set as  : $MDEReason
+	Storage : MDEReason
+	Width   : 25
 
-[Field: Downtime - Remarks Field]
-	Set as  : $MDE_Remarks
-	Storage : MDE_Remarks
-	Width   : 30
+[Field: MDERemarks Field]
+	Use     : Name Field
+	Set as  : $MDERemarks
+	Storage : MDERemarks
+	Width   : 25
 
-[Line: Machine Downtime Details Line]
-	Option : Is Machine Downtime Vch
-	Fields : Downtime - Machine Name Field, Downtime - From Time Field, Downtime - To Time Field, Downtime - Duration Field, Downtime - Reason Field, Downtime - Remarks Field
+[Field: MDE Machine Prompt]
+	Use    : Medium Prompt
+	Set as : "Machine : "
 
-[#Part: Voucher Type Sub Form]
-	Add : Line : Machine Downtime Details Line : Before : Field : Narration Field
+[Field: MDEFromTime Prompt]
+	Use    : Medium Prompt
+	Set as : "From (HH:MM) : "
 
-;  Pre-fill both ledger legs with the dedicated memo ledger at Rs.0, so the
-;  operator only has to press Enter through the accounting section.
-[#Field: Ledger Name Field]
-	Option : Is Machine Downtime Vch
-	Set as : "Machine Downtime (Memo)"
+[Field: MDEToTime Prompt]
+	Use    : Medium Prompt
+	Set as : "To (HH:MM) : "
 
-[#Field: Amount Field]
-	Option : Is Machine Downtime Vch
-	Set as : 0
+[Field: MDE Duration Prompt]
+	Use    : Medium Prompt
+	Set as : "Duration (Min) : "
+
+[Field: MDEReason Prompt]
+	Use    : Medium Prompt
+	Set as : "Downtime Reason : "
+
+[Field: MDERemarks Prompt]
+	Use    : Medium Prompt
+	Set as : "Remarks : "
+
+[Line: MDE Machine Line]
+	Fields    : MDE Machine Prompt, MDE Machine Field
+	Invisible : NOT @@IsMachineDowntimeVch
+
+[Line: MDE Time Line]
+	Fields    : MDEFromTime Prompt, MDEFromTime Field, MDEToTime Prompt, MDEToTime Field, MDE Duration Prompt, MDE Duration Field
+	Invisible : NOT @@IsMachineDowntimeVch
+
+[Line: MDEReason Line]
+	Fields    : MDEReason Prompt, MDEReason Field
+	Invisible : NOT @@IsMachineDowntimeVch
+
+[Line: MDERemarks Line]
+	Fields    : MDERemarks Prompt, MDERemarks Field
+	Invisible : NOT @@IsMachineDowntimeVch
+
+[#Part: VCH Narration]
+	Add : Line : Before : VCH Narration : MDE Machine Line, MDE Time Line, MDEReason Line, MDERemarks Line
 
 
-*  ----------------------------------------------------------------------------
-*  5. COLLECTIONS FOR REPORTS
-*  ----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; 5. COLLECTIONS FOR REPORTS
+;; ----------------------------------------------------------------------------
 
-[Collection: Machine Item Issue Vouchers]
-	Type    : Voucher
-	Fetch   : Date, VoucherNumber, MII_MachineName, MII_IssueReason, MII_Remarks, AllInventoryEntries.*
-	Filter  : Is Machine Item Issue Vch
-	Sort    : Date
+[Collection: MII Vouchers]
+	Type   : Voucher
+	Filter : IsMachineIssueVch
+	Fetch  : Date, VoucherNumber, VoucherTypeName, MIIMachineName, MIIIssueReason, MIIRemarks, AllInventoryEntries.*
 
-[Collection: Machine Item Issue Lines]
-	Source Collection : Machine Item Issue Vouchers
-	Walk               : AllInventoryEntries
-	Fetch              : StockItemName, ActualQty, BilledQty, Rate, Amount
+[Collection: MII Inventory Lines]
+	Source Collection : MII Vouchers
+	Walk              : AllInventoryEntries
+	Fetch             : StockItemName, ActualQty, Rate, Amount
+	Compute           : VchDate    : $Date
+	Compute           : VchNumber  : $VoucherNumber
+	Compute           : VchMachine : $MIIMachineName
+	Compute           : VchReason  : $MIIIssueReason
 
-[Collection: Machine Downtime Vouchers]
-	Type    : Voucher
-	Fetch   : Date, VoucherNumber, MDE_MachineName, MDE_FromTime, MDE_ToTime, MDE_DurationMinutes, MDE_Reason, MDE_Remarks
-	Filter  : Is Machine Downtime Vch
-	Sort    : Date
+[Collection: MDE Vouchers]
+	Type   : Voucher
+	Filter : IsMachineDowntimeVch
+	Fetch  : Date, VoucherNumber, VoucherTypeName, MDEMachineName, MDEFromTime, MDEToTime, MDEDurationMinutes, MDEReason, MDERemarks
 
 
-*  ----------------------------------------------------------------------------
-*  6. REPORT: MACHINE ITEM ISSUE REGISTER
-*  ----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; 6. REPORT: MACHINE ITEM ISSUE REGISTER
+;; ----------------------------------------------------------------------------
 
 [Report: Machine Item Issue Register]
-	Form   : Machine Item Issue Register Form
-	Title  : "Machine Item Issue Register"
+	Form  : MII Register Form
+	Title : "Machine Item Issue Register"
 
-[Form: Machine Item Issue Register Form]
-	Part   : Machine Item Issue Register Part
+[Form: MII Register Form]
+	Part   : MII Register Part
+	Width  : 100% Screen
+	Height : 100% Screen
 
-[Part: Machine Item Issue Register Part]
-	Line    : Machine Item Issue Register Header, Machine Item Issue Register Body
-	Repeat  : Machine Item Issue Register Body : Machine Item Issue Lines
-	Scroll  : Vertical
+[Part: MII Register Part]
+	Line   : MII Register Title Line, MII Register Detail Line
+	Repeat : MII Register Detail Line : MII Inventory Lines
+	Scroll : Vertical
 
-[Line: Machine Item Issue Register Header]
-	Fields    : Header - Date, Header - VchNo, Header - Machine, Header - Item, Header - Qty, Header - Rate, Header - Value, Header - Reason
-	Local     : Field : Header - Date   : Set as : "Date"
-	Local     : Field : Header - VchNo  : Set as : "Vch No"
-	Local     : Field : Header - Machine: Set as : "Machine"
-	Local     : Field : Header - Item   : Set as : "Item Name"
-	Local     : Field : Header - Qty    : Set as : "Qty"
-	Local     : Field : Header - Rate   : Set as : "Rate"
-	Local     : Field : Header - Value  : Set as : "Value"
-	Local     : Field : Header - Reason : Set as : "Reason"
+[Line: MII Register Title Line]
+	Use    : MII Register Detail Line
+	Local  : Field : MII Col Date    : Set as : "Date"
+	Local  : Field : MII Col VchNo   : Set as : "Vch No"
+	Local  : Field : MII Col Machine : Set as : "Machine"
+	Local  : Field : MII Col Item    : Set as : "Item Name"
+	Local  : Field : MII Col Qty     : Set as : "Qty"
+	Local  : Field : MII Col Rate    : Set as : "Rate"
+	Local  : Field : MII Col Amount  : Set as : "Value"
+	Local  : Field : MII Col Reason  : Set as : "Reason"
+	Border : Thin Top Bottom
 
-[Line: Machine Item Issue Register Body]
-	Fields : Body - Date, Body - VchNo, Body - Machine, Body - Item, Body - Qty, Body - Rate, Body - Value, Body - Reason
+[Line: MII Register Detail Line]
+	Fields : MII Col Date, MII Col VchNo, MII Col Machine, MII Col Item, MII Col Qty, MII Col Rate, MII Col Amount, MII Col Reason
 
-[Field: Header - Date]
-	Type   : String
-	Width  : 12
-
-[Field: Header - VchNo]
-	Type   : String
+[Field: MII Col Date]
+	Use    : Name Field
+	Set as : $VchDate
 	Width  : 10
 
-[Field: Header - Machine]
-	Type   : String
+[Field: MII Col VchNo]
+	Use    : Name Field
+	Set as : $VchNumber
+	Width  : 8
+
+[Field: MII Col Machine]
+	Use    : Name Field
+	Set as : $VchMachine
 	Width  : 20
 
-[Field: Header - Item]
-	Type   : String
-	Width  : 24
-
-[Field: Header - Qty]
-	Type   : String
-	Width  : 10
-
-[Field: Header - Rate]
-	Type   : String
-	Width  : 10
-
-[Field: Header - Value]
-	Type   : String
-	Width  : 12
-
-[Field: Header - Reason]
-	Type   : String
-	Width  : 18
-
-[Field: Body - Date]
-	Set as : $Date
-	Width  : 12
-
-[Field: Body - VchNo]
-	Set as : $VoucherNumber
-	Width  : 10
-
-[Field: Body - Machine]
-	Set as : $MII_MachineName
-	Width  : 20
-
-[Field: Body - Item]
+[Field: MII Col Item]
+	Use    : Name Field
 	Set as : $StockItemName
 	Width  : 24
 
-[Field: Body - Qty]
+[Field: MII Col Qty]
+	Use    : Name Field
 	Set as : $ActualQty
-	Width  : 10
+	Width  : 12
+	Align  : Right
 
-[Field: Body - Rate]
+[Field: MII Col Rate]
+	Use    : Name Field
 	Set as : $Rate
-	Width  : 10
+	Width  : 12
+	Align  : Right
 
-[Field: Body - Value]
+[Field: MII Col Amount]
+	Use    : Name Field
 	Set as : $Amount
 	Width  : 12
+	Align  : Right
 
-[Field: Body - Reason]
-	Set as : $MII_IssueReason
+[Field: MII Col Reason]
+	Use    : Name Field
+	Set as : $VchReason
+	Width  : 16
+
+
+;; ----------------------------------------------------------------------------
+;; 7. REPORT: MACHINE DOWNTIME REPORT
+;; ----------------------------------------------------------------------------
+;; Chronological register of every downtime entry. For a machine-wise rollup
+;; (total minutes per machine), export to Excel (Alt+E) and pivot there, or
+;; extend with a Group By collection tuned to your TallyPrime release.
+
+[Report: Machine Downtime Report]
+	Form  : MDE Report Form
+	Title : "Machine Downtime Report"
+
+[Form: MDE Report Form]
+	Part   : MDE Report Part
+	Width  : 100% Screen
+	Height : 100% Screen
+
+[Part: MDE Report Part]
+	Line   : MDE Report Title Line, MDE Report Detail Line
+	Repeat : MDE Report Detail Line : MDE Vouchers
+	Scroll : Vertical
+
+[Line: MDE Report Title Line]
+	Use    : MDE Report Detail Line
+	Local  : Field : MDE Col Date    : Set as : "Date"
+	Local  : Field : MDE Col VchNo   : Set as : "Vch No"
+	Local  : Field : MDE Col Machine : Set as : "Machine"
+	Local  : Field : MDE Col From    : Set as : "From"
+	Local  : Field : MDE Col To      : Set as : "To"
+	Local  : Field : MDE Col Minutes : Set as : "Minutes"
+	Local  : Field : MDE Col Reason  : Set as : "Reason"
+	Local  : Field : MDE Col Remarks : Set as : "Remarks"
+	Border : Thin Top Bottom
+
+[Line: MDE Report Detail Line]
+	Fields : MDE Col Date, MDE Col VchNo, MDE Col Machine, MDE Col From, MDE Col To, MDE Col Minutes, MDE Col Reason, MDE Col Remarks
+
+[Field: MDE Col Date]
+	Use    : Name Field
+	Set as : $Date
+	Width  : 10
+
+[Field: MDE Col VchNo]
+	Use    : Name Field
+	Set as : $VoucherNumber
+	Width  : 8
+
+[Field: MDE Col Machine]
+	Use    : Name Field
+	Set as : $MDEMachineName
+	Width  : 20
+
+[Field: MDE Col From]
+	Use    : Name Field
+	Set as : $MDEFromTime
+	Width  : 8
+
+[Field: MDE Col To]
+	Use    : Name Field
+	Set as : $MDEToTime
+	Width  : 8
+
+[Field: MDE Col Minutes]
+	Use    : Name Field
+	Set as : $MDEDurationMinutes
+	Width  : 8
+	Align  : Right
+
+[Field: MDE Col Reason]
+	Use    : Name Field
+	Set as : $MDEReason
+	Width  : 18
+
+[Field: MDE Col Remarks]
+	Use    : Name Field
+	Set as : $MDERemarks
 	Width  : 18
 
 
-*  ----------------------------------------------------------------------------
-*  7. REPORT: MACHINE DOWNTIME REPORT
-*  ----------------------------------------------------------------------------
-*  Detailed, chronological register of every downtime entry. To roll this up
-*  machine-wise (total minutes per machine, event counts, etc.) use Tally's
-*  built-in Export to Excel from this report and summarise there, since the
-*  exact aggregate-function names differ across Tally releases and are best
-*  verified/tuned against the target installation. See README for pointers on
-*  extending this report with a native machine-wise summary Part.
-
-[Report: Machine Downtime Report]
-	Form  : Machine Downtime Report Form
-	Title : "Machine Downtime Report"
-
-[Form: Machine Downtime Report Form]
-	Part : Machine Downtime Detail Part
-
-[Part: Machine Downtime Detail Part]
-	Line    : Downtime Detail Header, Downtime Detail Body
-	Repeat  : Downtime Detail Body : Machine Downtime Vouchers
-	Scroll  : Vertical
-
-[Line: Downtime Detail Header]
-	Fields : DH - Date, DH - VchNo, DH - Machine, DH - From, DH - To, DH - Minutes, DH - Reason, DH - Remarks
-	Local  : Field : DH - Date    : Set as : "Date"
-	Local  : Field : DH - VchNo   : Set as : "Vch No"
-	Local  : Field : DH - Machine : Set as : "Machine"
-	Local  : Field : DH - From    : Set as : "From"
-	Local  : Field : DH - To      : Set as : "To"
-	Local  : Field : DH - Minutes : Set as : "Minutes"
-	Local  : Field : DH - Reason  : Set as : "Reason"
-	Local  : Field : DH - Remarks : Set as : "Remarks"
-
-[Line: Downtime Detail Body]
-	Fields : DB - Date, DB - VchNo, DB - Machine, DB - From, DB - To, DB - Minutes, DB - Reason, DB - Remarks
-
-[Field: DH - Date]
-	Type  : String
-	Width : 12
-
-[Field: DH - VchNo]
-	Type  : String
-	Width : 10
-
-[Field: DH - Machine]
-	Type  : String
-	Width : 20
-
-[Field: DH - From]
-	Type  : String
-	Width : 8
-
-[Field: DH - To]
-	Type  : String
-	Width : 8
-
-[Field: DH - Minutes]
-	Type  : String
-	Width : 10
-
-[Field: DH - Reason]
-	Type  : String
-	Width : 20
-
-[Field: DH - Remarks]
-	Type  : String
-	Width : 20
-
-[Field: DB - Date]
-	Set as : $Date
-	Width  : 12
-
-[Field: DB - VchNo]
-	Set as : $VoucherNumber
-	Width  : 10
-
-[Field: DB - Machine]
-	Set as : $MDE_MachineName
-	Width  : 20
-
-[Field: DB - From]
-	Set as : $MDE_FromTime
-	Width  : 8
-
-[Field: DB - To]
-	Set as : $MDE_ToTime
-	Width  : 8
-
-[Field: DB - Minutes]
-	Set as : $MDE_DurationMinutes
-	Width  : 10
-
-[Field: DB - Reason]
-	Set as : $MDE_Reason
-	Width  : 20
-
-[Field: DB - Remarks]
-	Set as : $MDE_Remarks
-	Width  : 20
-
-
-*  ----------------------------------------------------------------------------
-*  8. GATEWAY OF TALLY MENU
-*  ----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; 8. GATEWAY OF TALLY MENU
+;; ----------------------------------------------------------------------------
 
 [Menu: Machine Reports Menu]
 	Title : "Machine Reports"
 	Item  : Machine Item Issue Register : Display : Machine Item Issue Register
 	Item  : Machine Downtime Report     : Display : Machine Downtime Report
-	Item  : Create Machine (Cost Centre): Create   : Cost Centre
 
-*  ============================================================================
-*  END OF FILE
-*  ============================================================================
+;; ============================================================================
+;; END OF FILE
+;; ============================================================================
